@@ -1,0 +1,12 @@
+# Local environment
+.env
+agent_env/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Large or personal assets kept out of git
+models/v2.onnx
+models/v2.onnx.json
+assets/sounds/
+ckpts/
