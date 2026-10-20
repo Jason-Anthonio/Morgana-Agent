@@ -4,9 +4,10 @@ from types import SimpleNamespace
 import requests
 
 from morgana.api import start_api
-from morgana.llm import SentenceSplitter
+from morgana.llm import Conversation, SentenceSplitter
 from morgana.memory import MemoryStore, history_window, is_pin_candidate, pin_fact
-from morgana.state import AgentStatus
+from morgana.state import AgentStatus, Stopwatch
+from morgana.text import speakable
 
 
 def test_sentence_splitter_reads_emotion_tag_across_chunks():
@@ -43,14 +44,39 @@ def test_pin_fact_only_pins_grounded_personal_facts(tmp_path):
     assert len(store.load()["pinned_facts"]) == 1
 
 
+PING = (
+    "😎 Looking good, Phantom Thief! Quick check-in, partner!\n\n"
+    "💧 Hydration check! Have you had water in the last hour?\n\n"
+    "_Reply with how you're doing, or just 'skip' to move on!_"
+)
+
+
+def test_speakable_drops_emojis_and_markdown():
+    assert speakable("🧘‍♀️ Stretch *report*!") == "Stretch report!"
+    assert speakable("👍🏽") == ""
+    assert speakable(PING) == (
+        "Looking good, Phantom Thief! Quick check-in, partner! Hydration check! "
+        "Have you had water in the last hour? Reply with how you're doing, or just 'skip' to move on!"
+    )
+
+
+def test_summarize_shortens_pings(tmp_path):
+    store = MemoryStore(tmp_path / "memory.json")
+    llm = SimpleNamespace(complete=lambda *args, **kwargs: "[calm] 💧 Drink some water, partner!")
+    assert Conversation(llm, store).summarize(PING) == "Drink some water, partner!"
+    assert Conversation(llm, store).summarize("🚶 Take a walk!") == "Take a walk!"  # short: no LLM
+    cut_off = SimpleNamespace(complete=lambda *args, **kwargs: "Drink some water and")
+    assert Conversation(cut_off, store).summarize(PING) == speakable(PING)
+
+
 def test_api(tmp_path):
     @contextmanager
     def turn(label):
-        yield None
+        yield Stopwatch(label)
 
     assistant = SimpleNamespace(
         status=AgentStatus(),
-        conversation=SimpleNamespace(store=MemoryStore(tmp_path / "memory.json")),
+        conversation=SimpleNamespace(store=MemoryStore(tmp_path / "memory.json"), summarize=lambda text: "Drink."),
         turn=turn,
         reply=lambda text, source, stopwatch: ("happy", f"You said {text}"),
         announce=lambda text, emotion, stopwatch: None,
@@ -60,7 +86,7 @@ def test_api(tmp_path):
     try:
         assert requests.get(f"{url}/status").json()["agent_state"] == "IDLE"
         assert requests.post(f"{url}/chat", json={"text": "hi"}).json() == {"reply": "You said hi", "emotion": "happy"}
-        assert requests.post(f"{url}/tts", json={"text": "Drink water"}).status_code == 200
+        assert requests.post(f"{url}/tts", json={"text": "💧 Drink water"}).json()["text"] == "Drink."
         assert requests.post(f"{url}/chat", json={"text": ""}).status_code == 400
         assert requests.get(f"{url}/nope").status_code == 404
     finally:

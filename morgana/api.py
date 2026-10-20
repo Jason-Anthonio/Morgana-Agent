@@ -50,10 +50,12 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.path == "/api/tts":
                 emotion = body.get("emotion") if body.get("emotion") in EMOTIONS else "calm"
-                assistant.conversation.store.add_messages("wellness_ping", ("bot", text[:300]))
                 with assistant.turn("wellness_ping") as stopwatch:
-                    assistant.announce(text, emotion, stopwatch)
-                self.send_json(200, {"spoken": True, "emotion": emotion, "text": text})
+                    spoken = assistant.conversation.summarize(text)
+                    stopwatch.mark("summarized")
+                    assistant.conversation.store.add_messages("wellness_ping", ("bot", spoken[:300]))
+                    assistant.announce(spoken, emotion, stopwatch)
+                self.send_json(200, {"spoken": True, "emotion": emotion, "text": spoken})
             else:
                 with assistant.turn("telegram") as stopwatch:
                     emotion, reply = assistant.reply(text, "telegram", stopwatch)

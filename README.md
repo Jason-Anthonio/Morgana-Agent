@@ -90,7 +90,7 @@ The gateway listens on `127.0.0.1:8643` by default and has no authentication.
 | `GET` | `/api/health` | | `{"status": "ok", "port": 8643}` |
 | `GET` | `/api/status` | | `{"agent_state", "current_emotion", "pings_sent", "ok"}` |
 | `POST` | `/api/chat` | `{"text": "..."}` | `{"reply", "emotion"}`; the reply is also spoken |
-| `POST` | `/api/tts` | `{"text": "...", "emotion": "happy"}` | `{"spoken": true, ...}` |
+| `POST` | `/api/tts` | `{"text": "...", "emotion": "happy"}` | `{"spoken": true, "text"}`; long text is summarized to one sentence, without emojis, before speaking |
 
 ## Tests
 

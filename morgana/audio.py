@@ -12,6 +12,7 @@ from piper.voice import PiperVoice, SynthesisConfig
 
 from morgana import config
 from morgana.state import AgentStatus, Mode, Stopwatch
+from morgana.text import speakable
 
 log = logging.getLogger(__name__)
 
@@ -137,7 +138,8 @@ class Speaker:
             thread.join()
 
     def say(self, emotion: str, text: str) -> None:
-        self.sentences.put((emotion, text))
+        if text := speakable(text):
+            self.sentences.put((emotion, text))
 
     def seconds_queued(self) -> float:
         """Estimated speech still ahead of the speaker, counting text not yet synthesized."""

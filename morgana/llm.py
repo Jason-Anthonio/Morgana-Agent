@@ -1,4 +1,4 @@
-"""Talks to the local model and turns its streamed reply into speakable sentences."""
+"""Talks to the local model and turns its streamed reply into speakable sentences"""
 
 import logging
 import re
@@ -9,19 +9,23 @@ from openai import OpenAI, OpenAIError
 from morgana import config
 from morgana.memory import MemoryStore, build_messages, pin_fact
 from morgana.state import EMOTIONS, Stopwatch
+from morgana.text import speakable
 
 log = logging.getLogger(__name__)
 
 FALLBACK_REPLY = "I am currently unable to connect to my local processing core."
 EMOTION_TAG = re.compile(rf"^\s*\[({'|'.join(EMOTIONS)})\]\s*", re.IGNORECASE)
 SENTENCE_END = re.compile(r"^(.+?[.!?])(?:\s+|$)", re.DOTALL)
+SUMMARY_PROMPT = (
+    "Rewrite the wellness reminder as a few sentences."
+    "Do not use emojis, markdown or quotes.\n"
+)
 
 
 class LocalLLM:
     """llama-server through its OpenAI-compatible API."""
 
     def __init__(self):
-        # llama-server ignores the key, but the client requires one.
         self.client = OpenAI(
             base_url=config.LOCAL_LLM_BASE_URL, api_key="local", timeout=config.LOCAL_LLM_TIMEOUT, max_retries=0
         )
@@ -41,12 +45,8 @@ class LocalLLM:
 
 
 class SentenceSplitter:
-    """Buffers streamed text and returns each sentence once it is complete.
-
-    The reply starts with an [emotion] tag, which is stripped and kept in
-    `emotion`. While `want_clauses()` is true (little audio left to play), long
-    sentences are also cut at commas or conjunctions so speech starts sooner.
-    """
+    """Buffers streamed text and returns each sentence once it is complete. 
+    While want_clauses() is true (little audio left to play), long sentences are also cut at commas or conjunctions so speech starts sooner. """
 
     def __init__(self, want_clauses=lambda: False):
         self.emotion = "calm"
@@ -65,9 +65,7 @@ class SentenceSplitter:
                 self.emotion = match.group(1).lower()
                 self.buffer = self.buffer[match.end():]
             elif any(f"[{e}]".startswith(self.buffer.lstrip().lower()) for e in EMOTIONS):
-                return []  # might still become a tag
-            # The small model often skips the tag; waiting for one would hold
-            # back every sentence until generation ends.
+                return [] 
             self.tag_checked = True
 
         sentences = []
@@ -92,10 +90,7 @@ class Conversation:
         self.store = store
 
     def stream_reply(self, user_text, source, on_sentence, want_clauses, stopwatch: Stopwatch) -> tuple[str, str]:
-        """Stream a reply, calling on_sentence(emotion, text) for each sentence.
-
-        Returns (emotion, full reply). Both turns are saved to memory.
-        """
+        """Reply by calling on_sentence(emotion, text) for each sentence."""
         log.info("Prompting local LLM (%s): %r", source, user_text)
         splitter = SentenceSplitter(want_clauses)
         reply = ""
@@ -127,14 +122,26 @@ class Conversation:
         self.store.add_messages(source, ("user", user_text[:200]), ("bot", text[:300]))
         return splitter.emotion, text
 
-    def warm_cache(self, user_text: str | None = None) -> None:
-        """In the background, pin any fact from user_text, then pre-evaluate the next prompt.
+    def summarize(self, text: str) -> str:
+        text = speakable(text)
+        if len(text) <= config.SUMMARY_MIN_CHARS:
+            return text
+        try:
+            summary = self.llm.complete(
+                [{"role": "system", "content": SUMMARY_PROMPT}, {"role": "user", "content": f"Reminder: {text}\nSentence:"}],
+                max_tokens=48,
+                temperature=0.3,
+            )
+        except OpenAIError as error:
+            log.warning("Ping summary failed: %s", error)
+            return text
+        summary = EMOTION_TAG.sub("", summary.removeprefix("Sentence:").strip().removeprefix("Reminder:")).strip().strip('"')
+        log.info("Ping summary: %r", summary)
+        # A summary without end punctuation ran out of tokens mid-sentence.
+        return speakable(summary) if summary.endswith((".", "!", "?")) else text
 
-        The next query then reuses llama-server's KV cache, so cold starts,
-        history window jumps and new pinned facts are paid for now instead of
-        during a reply. Both run in one thread because the server has a single
-        slot and the pin request evicts the cached prefix.
-        """
+    def warm_cache(self, user_text: str | None = None) -> None:
+        """In the background, pin any fact from user_text, then pre-evaluate the next prompt."""
         threading.Thread(target=self._warm, args=(user_text,), daemon=True).start()
 
     def _warm(self, user_text: str | None) -> None:

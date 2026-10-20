@@ -1,4 +1,4 @@
-"""Runtime settings, read from the environment and an optional .env file."""
+"""Runtime settings and personal .env file"""
 
 import os
 from pathlib import Path
@@ -57,26 +57,25 @@ INPUT_FRAMES_PER_BUFFER = 1280
 WAKEWORD_MODEL_PATH = _path("WAKEWORD_MODEL_PATH", Path("models/wakeword.onnx"))
 WAKEWORD_THRESHOLD = _float("WAKEWORD_THRESHOLD", 0.9)
 
-# Text-to-speech
+# TTS
 PIPER_MODEL_PATH = _path("PIPER_MODEL_PATH", Path("models/v2.onnx"))
 CUE_SOUND_PATH = _path("CUE_SOUND_PATH", Path("assets/sounds/got_it.wav"))
 TTS_LENGTH_SCALE = _float("TTS_LENGTH_SCALE", 1.12)
-# Fixed gain instead of Piper's per-chunk normalization; raw peaks sit around 0.4-0.6.
 TTS_VOLUME = _float("TTS_VOLUME", 1.5)
 TTS_KEEP_LEAD_SECONDS = _float("TTS_KEEP_LEAD_SECONDS", 0.04)
 TTS_KEEP_TAIL_SECONDS = _float("TTS_KEEP_TAIL_SECONDS", 0.12)
-# Rough spoken length per character, for text not yet synthesized.
 TTS_SECONDS_PER_CHAR = _float("TTS_SECONDS_PER_CHAR", 0.05)
-# PipeWire runs the output device at the smallest buffer any stream requests.
-# SDL's default of 128 frames underran under load and crackled.
 CUE_MIXER_BUFFER = _int("CUE_MIXER_BUFFER", 4096)
 
-# Streaming speech: split sentences into clauses while little audio is queued.
+# Split sentences into clauses
 FIRST_CLAUSE_MIN_CHARS = _int("FIRST_CLAUSE_MIN_CHARS", 12)  # 0 disables clause splitting
 CLAUSE_SPLIT_AHEAD_SECONDS = _float("CLAUSE_SPLIT_AHEAD_SECONDS", 2.0)
 CLAUSE_SPLIT_WORDS = tuple(
     _str("CLAUSE_SPLIT_WORDS", "and|but|or|so|because|which|while|then|when|if").split("|")
 )
+
+# Wellness pings longer than this are summarized by the LLM before speaking
+SUMMARY_MIN_CHARS = _int("SUMMARY_MIN_CHARS", 100)
 
 # HTTP gateway for the Telegram wellness bot
 API_HOST = _str("AGENT_API_HOST", "127.0.0.1")
