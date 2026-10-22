@@ -8,7 +8,7 @@ from enum import Enum
 
 log = logging.getLogger(__name__)
 
-EMOTIONS = ("calm", "happy", "angry")
+EMOTIONS = ("calm", "happy", "sad", "angry")
 
 
 class Mode(str, Enum):

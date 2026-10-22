@@ -1,12 +1,15 @@
+import os
 from contextlib import contextmanager
 from types import SimpleNamespace
 
+import pygame
 import requests
 
 from morgana.api import start_api
-from morgana.llm import Conversation, SentenceSplitter
+from morgana.face import Face
+from morgana.llm import Conversation, SentenceSplitter, mood_grammar
 from morgana.memory import MemoryStore, history_window, is_pin_candidate, pin_fact
-from morgana.state import AgentStatus, Stopwatch
+from morgana.state import EMOTIONS, AgentStatus, Stopwatch
 from morgana.text import speakable
 
 
@@ -17,6 +20,23 @@ def test_sentence_splitter_reads_emotion_tag_across_chunks():
         sentences += splitter.feed(chunk)
     assert splitter.emotion == "happy"
     assert sentences == ["Hello there.", "How are you?"]
+
+
+def test_mood_grammar_allows_every_emotion():
+    grammar = mood_grammar("tell me a joke")
+    assert all(f'"{emotion}"' in grammar for emotion in EMOTIONS)
+
+
+def test_every_emotion_has_face_frames():
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    pygame.display.init()
+    pygame.display.set_mode((1, 1))
+    try:
+        face = Face()
+        for emotion in EMOTIONS:
+            assert face.speaking[emotion] is not face.speaking["calm"] or emotion == "calm"
+    finally:
+        pygame.quit()
 
 
 def test_sentence_splitter_cuts_clauses_when_audio_runs_low():

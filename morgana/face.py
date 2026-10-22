@@ -12,7 +12,7 @@ from morgana.state import AgentStatus, Mode
 BLINK_INTERVAL = (5.0, 10.0)
 BLINK_SECONDS = 0.15
 MOUTH_FRAME_SECONDS = 0.1
-SPEAKING_DIRS = {"calm": "speaking", "happy": "happy", "angry": "angry"}
+SPEAKING_DIRS = {"calm": "speaking", "happy": "happy", "sad": "sad", "angry": "angry"}
 
 
 def _load_image(path: Path) -> pygame.Surface:

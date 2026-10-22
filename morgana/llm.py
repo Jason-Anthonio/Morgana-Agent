@@ -44,6 +44,12 @@ class LocalLLM:
                 yield chunk.choices[0].delta.content
 
 
+def mood_grammar(user_text: str) -> str:
+    """GBNF grammar that makes the reply start with exactly one emotion tag."""
+    choices = " | ".join(f'"{mood}"' for mood in EMOTIONS)
+    return f'root ::= "[" ({choices}) "] " [^[\\x00]*'
+
+
 class SentenceSplitter:
     """Buffers streamed text and returns each sentence once it is complete. 
     While want_clauses() is true (little audio left to play), long sentences are also cut at commas or conjunctions so speech starts sooner. """
@@ -98,7 +104,13 @@ class Conversation:
         try:
             stopwatch.mark("llm_request_started")
             messages = build_messages(self.store.load(), user_text)
-            for piece in self.llm.stream(messages, max_tokens=config.LOCAL_LLM_MAX_TOKENS, temperature=0.7):
+            pieces = self.llm.stream(
+                messages,
+                max_tokens=config.LOCAL_LLM_MAX_TOKENS,
+                temperature=0.7,
+                extra_body={"grammar": mood_grammar(user_text)},  # llama-server GBNF
+            )
+            for piece in pieces:
                 if not reply:
                     stopwatch.mark("llm_first_token")
                 reply += piece
