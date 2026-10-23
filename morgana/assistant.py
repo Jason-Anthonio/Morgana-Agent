@@ -1,9 +1,10 @@
-"""Runs each interaction: wakeword, listen, think, speak."""
+"""Runs wakeword, listen, think, and speak"""
 
 import logging
 import time
 from contextlib import contextmanager
 
+import numpy as np
 import pyaudio
 import pygame
 from openwakeword.model import Model as WakewordModel
@@ -15,6 +16,13 @@ from morgana.llm import Conversation
 from morgana.state import AgentStatus, Mode, Stopwatch
 
 log = logging.getLogger(__name__)
+
+
+def clear_wakeword(wakeword: WakewordModel) -> None:
+    silence = np.zeros(config.INPUT_FRAMES_PER_BUFFER, dtype=np.int16)
+    for _ in range(40):  # 3.2s, one frame at a time like the microphone
+        wakeword.predict(silence)
+    wakeword.reset()
 
 
 class Assistant:
@@ -60,16 +68,21 @@ class Assistant:
         microphone.open()
         self.conversation.warm_cache()
         log.info("Ready. Waiting for the wakeword...")
+        ignore_until = 0.0
         try:
             while self.status.running:
                 scores = wakeword.predict(microphone.read_frame())
+                if self.status.turn_lock.locked():
+                    ignore_until = time.monotonic() + config.WAKEWORD_COOLDOWN_SECONDS
+                if time.monotonic() < ignore_until:
+                    continue
                 if max(scores.values(), default=0) > config.WAKEWORD_THRESHOLD:
                     log.info("Wakeword detected")
                     microphone.close()
                     self.handle_voice_query(microphone)
-                    time.sleep(0.5)
+                    clear_wakeword(wakeword)
                     microphone.open()
-                    wakeword.reset()
+                    ignore_until = time.monotonic() + config.WAKEWORD_COOLDOWN_SECONDS
         except Exception:
             log.exception("Voice loop stopped")
         finally:

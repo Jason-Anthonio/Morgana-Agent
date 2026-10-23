@@ -2,10 +2,14 @@ import os
 from contextlib import contextmanager
 from types import SimpleNamespace
 
+import numpy as np
 import pygame
 import requests
+from openwakeword.model import Model as WakewordModel
 
+from morgana import config
 from morgana.api import start_api
+from morgana.assistant import clear_wakeword
 from morgana.face import Face
 from morgana.llm import Conversation, SentenceSplitter, mood_grammar
 from morgana.memory import MemoryStore, history_window, is_pin_candidate, pin_fact
@@ -111,3 +115,16 @@ def test_api(tmp_path):
         assert requests.get(f"{url}/nope").status_code == 404
     finally:
         server.shutdown()
+
+
+def test_clear_wakeword_forgets_heard_audio():
+    rng = np.random.default_rng(0)
+    models = [WakewordModel(wakeword_model_paths=[str(config.WAKEWORD_MODEL_PATH)]) for _ in range(2)]
+    for model in models:
+        model.predict(rng.integers(-20000, 20000, config.INPUT_FRAMES_PER_BUFFER * 25, dtype=np.int16))
+    before = [model.preprocessor.get_features(16) for model in models]
+    assert not np.allclose(*before)
+    for model in models:
+        clear_wakeword(model)
+    after = [model.preprocessor.get_features(16) for model in models]
+    assert np.allclose(*after, atol=1e-4)  # nothing of what each heard is left
