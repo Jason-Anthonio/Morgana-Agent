@@ -38,7 +38,7 @@ LOCAL_LLM_PORT = _int("LOCAL_LLM_PORT", 8080)
 LOCAL_LLM_BASE_URL = _str("LOCAL_LLM_BASE_URL", f"http://{LOCAL_LLM_HOST}:{LOCAL_LLM_PORT}/v1")
 LOCAL_LLM_MODEL = _str("LOCAL_LLM_MODEL", "morgana-local")
 LOCAL_LLM_TIMEOUT = _float("LOCAL_LLM_TIMEOUT", 30)
-LOCAL_LLM_MAX_TOKENS = _int("LOCAL_LLM_MAX_TOKENS", 64)
+LOCAL_LLM_MAX_TOKENS = _int("LOCAL_LLM_MAX_TOKENS", 96)
 LLM_CACHE_WARMUP = _bool("LLM_CACHE_WARMUP", True)
 
 # Conversation memory
@@ -65,6 +65,9 @@ TTS_LENGTH_SCALE = _float("TTS_LENGTH_SCALE", 1.12)
 TTS_VOLUME = _float("TTS_VOLUME", 1.5)
 TTS_KEEP_LEAD_SECONDS = _float("TTS_KEEP_LEAD_SECONDS", 0.04)
 TTS_KEEP_TAIL_SECONDS = _float("TTS_KEEP_TAIL_SECONDS", 0.12)
+# Closing the output stream drops whatever PipeWire still has buffered
+TTS_END_PADDING_SECONDS = _float("TTS_END_PADDING_SECONDS", 0.8)
+# Rough spoken length per character, for text not yet synthesized.
 TTS_SECONDS_PER_CHAR = _float("TTS_SECONDS_PER_CHAR", 0.05)
 CUE_MIXER_BUFFER = _int("CUE_MIXER_BUFFER", 4096)
 

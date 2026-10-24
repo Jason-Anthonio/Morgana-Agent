@@ -49,6 +49,18 @@ def test_sentence_splitter_cuts_clauses_when_audio_runs_low():
     assert SentenceSplitter(lambda: True).feed(text) == ["I went to the market,"]
 
 
+def test_reply_cut_by_token_limit_stops_at_last_full_sentence(tmp_path):
+    store = MemoryStore(tmp_path / "memory.json")
+    llm = SimpleNamespace(stream=lambda *args, **kwargs: iter(["[calm] A network learns", " from data. This technology"]))
+    spoken = []
+    reply = Conversation(llm, store).stream_reply(
+        "what is a neural network", "test", lambda emotion, text: spoken.append(text), lambda: False, Stopwatch("t")
+    )
+    assert spoken == ["A network learns from data."]
+    assert reply == ("calm", "A network learns from data.")
+    assert store.load()["conversation_history"][-1]["text"] == "A network learns from data."
+
+
 def test_history_window_moves_in_steps():
     memory = {"conversation_history": [{"text": f"m{i}"} for i in range(13)]}
     assert history_window(memory)[0]["text"] == "m0"

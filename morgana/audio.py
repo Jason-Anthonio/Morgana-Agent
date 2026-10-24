@@ -178,6 +178,7 @@ class Speaker:
                     self.stopwatch.first_audio_played = True
                     self.stopwatch.mark("first_audio")  # before write(), which blocks until played
                 stream.write(pcm)
+            stream.write(bytes(2 * int(self.rate * config.TTS_END_PADDING_SECONDS)))
         finally:
             stream.stop_stream()
             stream.close()

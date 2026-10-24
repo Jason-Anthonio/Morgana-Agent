@@ -117,7 +117,12 @@ class Conversation:
                 for sentence in splitter.feed(piece):
                     on_sentence(splitter.emotion, sentence)
                     spoke = True
-            if rest := splitter.flush():
+            rest = splitter.flush()
+            if spoke and rest and not rest.endswith((".", "!", "?")):
+                # The token limit ended the reply mid-sentence; stop at the last full one.
+                log.info("Dropped unfinished sentence: %r", rest)
+                reply = reply.rstrip()[:-len(rest)]
+            elif rest:
                 on_sentence(splitter.emotion, rest)
                 spoke = True
             stopwatch.mark("llm_done")
