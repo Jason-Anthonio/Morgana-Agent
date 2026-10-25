@@ -63,8 +63,8 @@ PIPER_MODEL_PATH = _path("PIPER_MODEL_PATH", Path("models/v2.onnx"))
 CUE_SOUND_PATH = _path("CUE_SOUND_PATH", Path("assets/sounds/got_it.wav"))
 TTS_LENGTH_SCALE = _float("TTS_LENGTH_SCALE", 1.12)
 TTS_VOLUME = _float("TTS_VOLUME", 1.5)
-TTS_KEEP_LEAD_SECONDS = _float("TTS_KEEP_LEAD_SECONDS", 0.04)
-TTS_KEEP_TAIL_SECONDS = _float("TTS_KEEP_TAIL_SECONDS", 0.12)
+TTS_KEEP_LEAD_SECONDS = _float("TTS_KEEP_LEAD_SECONDS", 0.02)
+TTS_KEEP_TAIL_SECONDS = _float("TTS_KEEP_TAIL_SECONDS", 0.06)
 # Closing the output stream drops whatever PipeWire still has buffered
 TTS_END_PADDING_SECONDS = _float("TTS_END_PADDING_SECONDS", 0.8)
 # Rough spoken length per character, for text not yet synthesized.
