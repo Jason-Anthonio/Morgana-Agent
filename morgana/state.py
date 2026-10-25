@@ -21,6 +21,8 @@ class Mode(str, Enum):
 class AgentStatus:
     mode: Mode = Mode.IDLE
     emotion: str = "calm"
+    # perf_counter() (start, end) of speech in the playing and next audio chunk.
+    voiced: list[tuple[float, float]] = field(default_factory=list)
     shutdown: threading.Event = field(default_factory=threading.Event)
     # Held for a whole interaction so voice, Telegram and pings never talk over each other.
     turn_lock: threading.Lock = field(default_factory=threading.Lock)

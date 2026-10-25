@@ -43,8 +43,12 @@ class Face:
             self._listening_index = (self._listening_index + 1) % len(self.listening)
             return self.listening[self._listening_index]
         if status.mode is Mode.SPEAKING:
+            frames = self.speaking.get(status.emotion, self.speaking["calm"])
+            clock = time.perf_counter()
+            if not any(start <= clock < end for start, end in status.voiced):
+                return frames[0] 
             if now - self._mouth_changed_at > MOUTH_FRAME_SECONDS:
-                self._mouth_frame = random.choice(self.speaking.get(status.emotion, self.speaking["calm"]))
+                self._mouth_frame = random.choice(frames)
                 self._mouth_changed_at = now
             return self._mouth_frame
         if now >= self._next_blink + BLINK_SECONDS:

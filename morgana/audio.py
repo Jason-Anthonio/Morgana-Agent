@@ -172,7 +172,10 @@ class Speaker:
                 emotion, pcm = item
                 duration = len(pcm) / 2 / self.rate
                 self.queued_seconds -= duration
-                self.playing_until = time.perf_counter() + duration
+                start = max(time.perf_counter(), self.playing_until)
+                self.playing_until = start + duration
+                speech = (start + config.TTS_KEEP_LEAD_SECONDS, self.playing_until - config.TTS_KEEP_TAIL_SECONDS)
+                self.status.voiced = [*self.status.voiced[-1:], speech]
                 self.status.emotion, self.status.mode = emotion, Mode.SPEAKING
                 if not self.stopwatch.first_audio_played:
                     self.stopwatch.first_audio_played = True

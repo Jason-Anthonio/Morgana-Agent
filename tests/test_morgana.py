@@ -1,4 +1,5 @@
 import os
+import time
 from contextlib import contextmanager
 from types import SimpleNamespace
 
@@ -13,7 +14,7 @@ from morgana.assistant import clear_wakeword
 from morgana.face import Face
 from morgana.llm import Conversation, SentenceSplitter, mood_grammar
 from morgana.memory import MemoryStore, history_window, is_pin_candidate, pin_fact
-from morgana.state import EMOTIONS, AgentStatus, Stopwatch
+from morgana.state import EMOTIONS, AgentStatus, Mode, Stopwatch
 from morgana.text import speakable
 
 
@@ -39,6 +40,20 @@ def test_every_emotion_has_face_frames():
         face = Face()
         for emotion in EMOTIONS:
             assert face.speaking[emotion] is not face.speaking["calm"] or emotion == "calm"
+    finally:
+        pygame.quit()
+
+
+def test_face_rests_on_first_frame_between_clauses():
+    os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+    pygame.display.init()
+    pygame.display.set_mode((1, 1))
+    try:
+        face = Face()
+        status = AgentStatus(mode=Mode.SPEAKING, emotion="happy")
+        assert face.frame(status) is face.speaking["happy"][0]  # no voice playing
+        status.voiced = [(time.perf_counter() - 1, time.perf_counter() + 10)]
+        assert face.frame(status) in face.speaking["happy"]
     finally:
         pygame.quit()
 
