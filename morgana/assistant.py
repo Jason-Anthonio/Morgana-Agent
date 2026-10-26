@@ -8,10 +8,9 @@ import numpy as np
 import pyaudio
 import pygame
 from openwakeword.model import Model as WakewordModel
-from piper.voice import PiperVoice
 
 from morgana import config
-from morgana.audio import Microphone, Speaker
+from morgana.audio import Microphone, Speaker, load_voice
 from morgana.llm import Conversation
 from morgana.state import AgentStatus, Mode, Stopwatch
 
@@ -29,7 +28,7 @@ class Assistant:
     def __init__(self, conversation: Conversation, status: AgentStatus):
         self.conversation = conversation
         self.status = status
-        self.voice = PiperVoice.load(str(config.PIPER_MODEL_PATH))
+        self.voice = load_voice()
         pygame.mixer.init(buffer=config.CUE_MIXER_BUFFER)
         self.cue = pygame.mixer.Sound(config.CUE_SOUND_PATH) if config.CUE_SOUND_PATH.exists() else None
 

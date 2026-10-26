@@ -13,7 +13,8 @@ LLAMA_SERVER="${LLAMA_SERVER:-$HOME/llama.cpp/build/bin/llama-server}"
 MODEL_PATH="${LOCAL_LLM_MODEL_PATH:-$HOME/models/qwen2.5-1.5b-instruct-q4_k_m.gguf}"
 HOST="${LOCAL_LLM_HOST:-127.0.0.1}"
 PORT="${LOCAL_LLM_PORT:-8080}"
-THREADS="${LOCAL_LLM_THREADS:-4}"
+# One core is left for Piper, which synthesizes while the model generates.
+THREADS="${LOCAL_LLM_THREADS:-3}"
 CONTEXT="${LOCAL_LLM_CONTEXT:-2048}"
 
 if [[ ! -x "$LLAMA_SERVER" ]]; then

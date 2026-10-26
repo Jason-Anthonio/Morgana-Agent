@@ -16,6 +16,27 @@ log = logging.getLogger(__name__)
 FALLBACK_REPLY = "I am currently unable to connect to my local processing core."
 EMOTION_TAG = re.compile(rf"^\s*\[({'|'.join(EMOTIONS)})\]\s*", re.IGNORECASE)
 SENTENCE_END = re.compile(r"^(.+?[.!?])(?:\s+|$)", re.DOTALL)
+EMOTION_TAGS = re.compile(rf"\s*\[({'|'.join(EMOTIONS)})\]\s*", re.IGNORECASE)
+# The 1.5B model rarely picks a strong mood on its own, so a message that clearly
+# calls for one forces the first sentence's tag; later sentences choose freely.
+# Checked in order, so "passed away" is sad before "passed" can read as happy.
+MOOD_CUES = (
+    ("sad", re.compile(
+        r"\b(died|dead|passed away|lost|sick|ill|hurts?|injured|fail(ed|ing)?|broke up|dumped|"
+        r"rejected|fired|sad|depressed|lonely|crying|cried|miss (him|her|them|my))\b",
+        re.IGNORECASE,
+    )),
+    ("angry", re.compile(
+        r"\b(cat|kitty|kitten|meow|furball|all[- ]nighter|no sleep|"
+        r"skip(ped|ping)? (lunch|dinner|breakfast|meals?|sleep))\b",
+        re.IGNORECASE,
+    )),
+    ("happy", re.compile(
+        r"\b(passed (my|the|an?)|got (the|a|an|into)|promoted|promotion|won(?!')|finished|did it|"
+        r"thanks?|thank you|love you|good (job|boy)|great news|birthday|sushi|tuna|hello|hi|good morning)\b",
+        re.IGNORECASE,
+    )),
+)
 SUMMARY_PROMPT = (
     "Rewrite the wellness reminder as a few sentences."
     "Do not use emojis, markdown or quotes.\n"
@@ -45,14 +66,25 @@ class LocalLLM:
 
 
 def mood_grammar(user_text: str) -> str:
-    """GBNF grammar that makes the reply start with exactly one emotion tag."""
+    """GBNF grammar that makes every sentence start with exactly one emotion tag."""
+    first = next((mood for mood, cue in MOOD_CUES if cue.search(user_text)), None)
     choices = " | ".join(f'"{mood}"' for mood in EMOTIONS)
-    return f'root ::= "[" ({choices}) "] " [^[\\x00]*'
+    first_choices = f'"{first}"' if first else "mood"
+    return (
+        f'root ::= "[" ({first_choices}) "] " text (" [" mood "] " text)*\n'
+        f"mood ::= {choices}\n"
+        "text ::= [^[.!?\\x00]+ [.!?]+"
+    )
 
 
 class SentenceSplitter:
-    """Buffers streamed text and returns each sentence once it is complete. 
-    While want_clauses() is true (little audio left to play), long sentences are also cut at commas or conjunctions so speech starts sooner. """
+    """Buffers streamed text and returns each sentence once it is complete.
+
+    Each sentence starts with an [emotion] tag, which is stripped and kept in
+    `emotion`, so feed() returns (emotion, sentence) pairs. While
+    `want_clauses()` is true (little audio left to play), long sentences are
+    also cut at commas or conjunctions so speech starts sooner.
+    """
 
     def __init__(self, want_clauses=lambda: False):
         self.emotion = "calm"
@@ -64,26 +96,31 @@ class SentenceSplitter:
             rf"^(.{{{config.FIRST_CLAUSE_MIN_CHARS},}}?(?:[,;:](?=\s)|(?=\s(?:{clause_words})\s)))\s+", re.DOTALL
         )
 
-    def feed(self, text: str) -> list[str]:
+    def feed(self, text: str) -> list[tuple[str, str]]:
         self.buffer += text
-        if not self.tag_checked:
-            if match := EMOTION_TAG.match(self.buffer):
-                self.emotion = match.group(1).lower()
-                self.buffer = self.buffer[match.end():]
-            elif any(f"[{e}]".startswith(self.buffer.lstrip().lower()) for e in EMOTIONS):
-                return [] 
-            self.tag_checked = True
-
         sentences = []
         while True:
+            if not self.tag_checked:
+                if match := EMOTION_TAG.match(self.buffer):
+                    self.emotion = match.group(1).lower()
+                    self.buffer = self.buffer[match.end():]
+                elif any(f"[{e}]".startswith(self.buffer.lstrip().lower()) for e in EMOTIONS):
+                    return sentences  # might still become a tag
+                # The small model often skips the tag; waiting for one would hold
+                # back every sentence until generation ends.
+                self.tag_checked = True
+
             match = SENTENCE_END.search(self.buffer)
-            if not match and config.FIRST_CLAUSE_MIN_CHARS > 0 and self.want_clauses():
+            clause = not match and config.FIRST_CLAUSE_MIN_CHARS > 0 and self.want_clauses()
+            if clause:
                 match = self.clause_end.search(self.buffer)
             if not match:
                 return sentences
             self.buffer = self.buffer[match.end():]
             if sentence := match.group(1).strip():
-                sentences.append(sentence)
+                sentences.append((self.emotion, sentence))
+            # A new sentence may open with its own mood tag; a clause never does.
+            self.tag_checked = clause
 
     def flush(self) -> str:
         rest, self.buffer = self.buffer.strip(), ""
@@ -114,8 +151,8 @@ class Conversation:
                 if not reply:
                     stopwatch.mark("llm_first_token")
                 reply += piece
-                for sentence in splitter.feed(piece):
-                    on_sentence(splitter.emotion, sentence)
+                for emotion, sentence in splitter.feed(piece):
+                    on_sentence(emotion, sentence)
                     spoke = True
             rest = splitter.flush()
             if spoke and rest and not rest.endswith((".", "!", "?")):
@@ -130,14 +167,15 @@ class Conversation:
             log.error("Local LLM error: %s", error)
 
         match = EMOTION_TAG.match(reply)
-        text = reply[match.end():].strip() if match else reply.strip()
+        emotion = match.group(1).lower() if match else "calm"
+        text = EMOTION_TAGS.sub(" ", reply).strip()
         if not text:
             if not spoke:
                 on_sentence("calm", FALLBACK_REPLY)
             return "calm", FALLBACK_REPLY
 
         self.store.add_messages(source, ("user", user_text[:200]), ("bot", text[:300]))
-        return splitter.emotion, text
+        return emotion, text
 
     def summarize(self, text: str) -> str:
         text = speakable(text)
@@ -152,7 +190,7 @@ class Conversation:
         except OpenAIError as error:
             log.warning("Ping summary failed: %s", error)
             return text
-        summary = EMOTION_TAG.sub("", summary.removeprefix("Sentence:").strip().removeprefix("Reminder:")).strip().strip('"')
+        summary = EMOTION_TAGS.sub(" ", summary.removeprefix("Sentence:").strip().removeprefix("Reminder:")).strip().strip('"')
         log.info("Ping summary: %r", summary)
         # A summary without end punctuation ran out of tokens mid-sentence.
         return speakable(summary) if summary.endswith((".", "!", "?")) else text

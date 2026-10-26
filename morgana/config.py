@@ -61,6 +61,8 @@ WAKEWORD_COOLDOWN_SECONDS = _float("WAKEWORD_COOLDOWN_SECONDS", 1.5)
 # TTS
 PIPER_MODEL_PATH = _path("PIPER_MODEL_PATH", Path("models/v2.onnx"))
 CUE_SOUND_PATH = _path("CUE_SOUND_PATH", Path("assets/sounds/got_it.wav"))
+# Cores Piper may use; llama-server gets the rest (LOCAL_LLM_THREADS).
+TTS_THREADS = _int("TTS_THREADS", 1)
 TTS_LENGTH_SCALE = _float("TTS_LENGTH_SCALE", 1.12)
 TTS_VOLUME = _float("TTS_VOLUME", 1.5)
 TTS_KEEP_LEAD_SECONDS = _float("TTS_KEEP_LEAD_SECONDS", 0.02)

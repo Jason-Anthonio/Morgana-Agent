@@ -6,6 +6,7 @@ import threading
 import time
 
 import numpy as np
+import onnxruntime
 import pyaudio
 import speech_recognition as sr
 from piper.voice import PiperVoice, SynthesisConfig
@@ -80,6 +81,22 @@ class Microphone:
         except (sr.RequestError, OSError) as error:
             log.error("Transcription failed: %s", error)
         return ""
+
+
+def load_voice() -> PiperVoice:
+    """Piper limited to TTS_THREADS cores, leaving the rest to llama-server.
+
+    Both default to every core, and synthesizing one sentence while the model
+    writes the next slowed generation from ~6 to ~1 token/s.
+    """
+    voice = PiperVoice.load(str(config.PIPER_MODEL_PATH))
+    options = onnxruntime.SessionOptions()
+    options.intra_op_num_threads = config.TTS_THREADS
+    options.inter_op_num_threads = 1
+    voice.session = onnxruntime.InferenceSession(
+        str(config.PIPER_MODEL_PATH), sess_options=options, providers=["CPUExecutionProvider"]
+    )
+    return voice
 
 
 def synthesize(voice: PiperVoice, text: str):

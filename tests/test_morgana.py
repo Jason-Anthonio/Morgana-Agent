@@ -24,12 +24,23 @@ def test_sentence_splitter_reads_emotion_tag_across_chunks():
     for chunk in ["[ha", "ppy] Hello", " there. How", " are you?"]:
         sentences += splitter.feed(chunk)
     assert splitter.emotion == "happy"
-    assert sentences == ["Hello there.", "How are you?"]
+    assert sentences == [("happy", "Hello there."), ("happy", "How are you?")]
 
 
-def test_mood_grammar_allows_every_emotion():
-    grammar = mood_grammar("tell me a joke")
-    assert all(f'"{emotion}"' in grammar for emotion in EMOTIONS)
+def test_sentence_splitter_changes_emotion_per_sentence():
+    splitter = SentenceSplitter()
+    sentences = []
+    for chunk in ["[angry] I'm not a cat! [", "hap", "py] Cute, though?"]:
+        sentences += splitter.feed(chunk)
+    assert sentences == [("angry", "I'm not a cat!"), ("happy", "Cute, though?")]
+
+
+def test_mood_grammar_forces_first_mood_from_cues():
+    assert mood_grammar("tell me a joke").startswith('root ::= "[" (mood) "] "')
+    assert mood_grammar("my dog passed away today").startswith('root ::= "[" ("sad") "] "')
+    assert mood_grammar("you're a cute cat").startswith('root ::= "[" ("angry") "] "')
+    assert mood_grammar("I passed my exam").startswith('root ::= "[" ("happy") "] "')
+    assert mood_grammar("I won't go").startswith('root ::= "[" (mood) "] "')
 
 
 def test_every_emotion_has_face_frames():
@@ -61,12 +72,12 @@ def test_face_rests_on_first_frame_between_clauses():
 def test_sentence_splitter_cuts_clauses_when_audio_runs_low():
     text = "I went to the market, and then I came home "
     assert SentenceSplitter(lambda: False).feed(text) == []
-    assert SentenceSplitter(lambda: True).feed(text) == ["I went to the market,"]
+    assert SentenceSplitter(lambda: True).feed(text) == [("calm", "I went to the market,")]
 
 
 def test_reply_cut_by_token_limit_stops_at_last_full_sentence(tmp_path):
     store = MemoryStore(tmp_path / "memory.json")
-    llm = SimpleNamespace(stream=lambda *args, **kwargs: iter(["[calm] A network learns", " from data. This technology"]))
+    llm = SimpleNamespace(stream=lambda *args, **kwargs: iter(["[calm] A network learns", " from data. [happy] This technology"]))
     spoken = []
     reply = Conversation(llm, store).stream_reply(
         "what is a neural network", "test", lambda emotion, text: spoken.append(text), lambda: False, Stopwatch("t")
